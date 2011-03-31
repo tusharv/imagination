@@ -5,11 +5,7 @@
 	import flash.display.BlendMode;
 	import flash.display.Graphics;
 	import flash.display.PixelSnapping;
-	import flash.display.Shape;
 	import flash.display.Sprite;
-	import flash.display.Stage;
-	import flash.display.StageAlign;
-	import flash.display.StageScaleMode;
 	import flash.events.Event;
 	import flash.events.MouseEvent;
 	import flash.events.TouchEvent;
@@ -20,7 +16,7 @@
 	import flash.ui.Multitouch;
 	import flash.ui.MultitouchInputMode;
 	
-	public class Imagination
+	public class Imagination extends Sprite
 	{
 		// Main constants
 		private const RED_STEP:Number = 0.02;
@@ -36,7 +32,8 @@
 		private const MATRIX:Matrix = new Matrix(0.5, 0, 0, 0.5, 0, 0);
 		
 		// Main variables
-		private var stage:Stage;
+		private var imaginationWidth:uint;
+		private var imaginationHeight:uint;
 		private var points:Vector.<ImaginationPoint>;
 		private var px:int;
 		private var py:int;
@@ -48,27 +45,24 @@
 		private var green:Number;
 		private var blue:Number;
 		private var sprite:Sprite;
-		private var graphics:Graphics;
+		private var graphics2:Graphics;
 		private var bitmap:Bitmap;
 		private var bitmapData:BitmapData;
 		private var blackBitmapData:BitmapData;
 		private var rect:Rectangle;
 		private var isTouch:Boolean;
 		
-		public function Imagination(stage:Stage)
+		public function Imagination(imaginationWidth:uint = 800, imaginationHeight:uint = 600)
 		{
-			this.stage = stage;
+			this.imaginationWidth = imaginationWidth;
+			this.imaginationHeight = imaginationHeight;
 			
-			initStage();
-			initLines();
-			initBitmap();
+			addEventListener(Event.ADDED_TO_STAGE, onAddedToStage);
 		}
 		
-		private function initStage():void
+		private function onAddedToStage(event:Event):void
 		{
-			stage.align = StageAlign.TOP_LEFT;
-			stage.scaleMode = StageScaleMode.NO_SCALE;
-			stage.addEventListener(Event.RESIZE, onResize);
+			removeEventListener(Event.ADDED_TO_STAGE, onAddedToStage);
 			
 			isTouch = Multitouch.supportsTouchEvents;
 			
@@ -76,24 +70,31 @@
 			{
 				Multitouch.inputMode = MultitouchInputMode.TOUCH_POINT;
 				spread = SPREAD_TOUCH;
-				stage.addEventListener(TouchEvent.TOUCH_MOVE, onTouchMove);
-				stage.addEventListener(Event.ENTER_FRAME, update);
+				addEventListener(TouchEvent.TOUCH_MOVE, onTouchMove);
+				addEventListener(Event.ENTER_FRAME, update);
 			}
 			else
 			{
 				spread = SPREAD_MAX;
-				stage.addEventListener(MouseEvent.MOUSE_MOVE, onMouseMove);
+				addEventListener(MouseEvent.MOUSE_MOVE, onMouseMove);
 			}
+			
+			initLines();
+			initBitmap();
 		}
 		
 		private function onMouseMove(event:MouseEvent):void
 		{
-			px = stage.mouseX;
-			py = stage.mouseY;
-			stage.removeEventListener(MouseEvent.MOUSE_MOVE, onMouseMove);
-			stage.addEventListener(MouseEvent.MOUSE_DOWN, onMouseDown);
-			stage.addEventListener(MouseEvent.MOUSE_UP, onMouseUp);
-			stage.addEventListener(Event.ENTER_FRAME, update);
+			px = mouseX;
+			py = mouseY;
+			removeEventListener(MouseEvent.MOUSE_MOVE, onMouseMove);
+			
+			addEventListener(MouseEvent.MOUSE_DOWN, onMouseDown);
+			addEventListener(MouseEvent.MOUSE_UP, onMouseUp);
+			addEventListener(MouseEvent.MOUSE_OUT, onMouseUp);
+			stage.addEventListener(Event.MOUSE_LEAVE, onMouseUp);
+			
+			addEventListener(Event.ENTER_FRAME, update);
 		}
 		
 		private function initLines():void
@@ -108,23 +109,19 @@
 			
 			// The main lines shape
 			sprite = new Sprite();
-			graphics = sprite.graphics;
+			graphics2 = sprite.graphics;
 		}
 		
 		private function initBitmap():void
 		{
-			// Stage sizes
-			var sw:uint = stage.stageWidth;
-			var sh:uint = stage.stageHeight;
-			var sw2:uint = Math.ceil(sw * 0.5);
-			var sh2:uint = Math.ceil(sh * 0.5);
-			
 			// Create the main bitmap to draw into (and half the size to run faster)
-			bitmap = new Bitmap(new BitmapData(sw2, sh2, false, 0xff000000), PixelSnapping.NEVER, true);
+			var halfWidth:uint = Math.ceil(imaginationWidth * 0.5);
+			var halfHeight:uint = Math.ceil(imaginationHeight * 0.5);
+			bitmap = new Bitmap(new BitmapData(halfWidth, halfHeight, false, 0xff000000), PixelSnapping.NEVER, true);
 			bitmapData = bitmap.bitmapData;
 			rect = bitmapData.rect;
 			bitmap.scaleX = bitmap.scaleY = 2;
-			stage.addChild(bitmap);
+			addChild(bitmap);
 			
 			// Create bitmap data for fading into black
 			blackBitmapData = bitmapData.clone();
@@ -136,7 +133,7 @@
 			spread = SPREAD_MIN;
 		}
 		
-		private function onMouseUp(event:MouseEvent):void
+		private function onMouseUp(event:Event):void
 		{
 			// Spread lines out when mouse is released
 			spread = SPREAD_MAX;
@@ -144,14 +141,17 @@
 		
 		private function onTouchMove(event:TouchEvent):void
 		{
-			tx = event.stageX;
-			ty = event.stageY;
+			tx = event.localX;
+			ty = event.localY;
 		}
 		
-		private function onResize(event:Event):void
+		public function setSize(imaginationWidth:uint, imaginationHeight:uint):void
 		{
-			// Start again with the bitmap if the stage is resized
-			stage.removeChild(bitmap);
+			this.imaginationWidth = imaginationWidth;
+			this.imaginationHeight = imaginationHeight;
+			
+			// Create a new bitmap if resized
+			removeChild(bitmap);
 			disposeBitmaps();
 			initBitmap();
 		}
@@ -161,12 +161,14 @@
 			if (isTouch) draw(tx, ty);
 			else
 			{
-				draw(stage.mouseX, stage.mouseY);
+				draw(mouseX, mouseY);
+				
+				// Draw emanating orbs on low spread
 				if (spread == SPREAD_MIN)
 				{
 					for (var i:uint = 8; i--; )
 					{
-						sprite.addChild(new Orb(points[points.length - 1].color, stage.mouseX + (Math.random() - 0.5) * 8, stage.mouseY + (Math.random() - 0.5) * 8, (Math.random() - 0.5) * 8, (Math.random() - 0.5) * 8));
+						sprite.addChild(new Orb(points[points.length - 1].color, mouseX + (Math.random() - 0.5) * 8, mouseY + (Math.random() - 0.5) * 8, (Math.random() - 0.5) * 8, (Math.random() - 0.5) * 8));
 					}
 				}
 			}
@@ -209,8 +211,8 @@
 		private function drawLines():void
 		{
 			// Clear the graphics before we draw the lines
-			graphics.clear();
-			graphics.moveTo(px, py);
+			graphics2.clear();
+			graphics2.moveTo(px, py);
 			
 			var p0:ImaginationPoint, p1:ImaginationPoint;
 			
@@ -224,8 +226,8 @@
 				p0.spread();
 				
 				// Draw the curve, fading out the last 32 points with alpha
-				graphics.lineStyle(p0.size, p0.color, (points.length > (MAX_LENGTH - 32) && i < 32) ? i / 32 : 1);
-				graphics.curveTo(p0.x, p0.y, (p0.x + p1.x) * 0.5, (p0.y + p1.y) * 0.5);
+				graphics2.lineStyle(p0.size, p0.color, (points.length > (MAX_LENGTH - 32) && i < 32) ? i / 32 : 1);
+				graphics2.curveTo(p0.x, p0.y, (p0.x + p1.x) * 0.5, (p0.y + p1.y) * 0.5);
 			}
 		}
 		
@@ -245,6 +247,19 @@
 			bitmap.bitmapData = null;
 			blackBitmapData.dispose();
 			blackBitmapData = null;
+		}
+		
+		public function dispose():void
+		{
+			removeEventListener(Event.ADDED_TO_STAGE, onAddedToStage);
+			removeEventListener(TouchEvent.TOUCH_MOVE, onTouchMove);
+			removeEventListener(Event.ENTER_FRAME, update);
+			removeEventListener(MouseEvent.MOUSE_MOVE, onMouseMove);
+			removeEventListener(MouseEvent.MOUSE_DOWN, onMouseDown);
+			removeEventListener(MouseEvent.MOUSE_UP, onMouseUp);
+			if (stage !== null) stage.removeEventListener(Event.MOUSE_LEAVE, onMouseUp);
+			
+			disposeBitmaps();
 		}
 	}
 }
