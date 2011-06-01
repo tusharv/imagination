@@ -68,8 +68,11 @@
 			
 			if (isTouch)
 			{
+				tx = stage.stageWidth / 2;
+				ty = stage.stageHeight / 2;
 				Multitouch.inputMode = MultitouchInputMode.TOUCH_POINT;
 				spread = SPREAD_TOUCH;
+				addEventListener(TouchEvent.TOUCH_BEGIN, onTouchMove);
 				addEventListener(TouchEvent.TOUCH_MOVE, onTouchMove);
 				addEventListener(Event.ENTER_FRAME, update);
 			}
@@ -189,6 +192,12 @@
 			// Store the mouse position
 			px = mx;
 			py = my;
+			
+			if (isTouch)
+			{
+				px += Math.random() * 8 - 4;
+				py += Math.random() * 8 - 4;
+			}
 			
 			// Create a new point on the line
 			points.push(new ImaginationPoint(
